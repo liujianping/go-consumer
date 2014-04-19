@@ -1,4 +1,4 @@
-# wechat Go 开发框架
+# 基于Golang开发的生产者消费者模型，大量用于消息队列处理服务中
 
 [![GoDoc](http://godoc.org/github.com/liujianping/consumer?status.png)](http://godoc.org/github.com/liujianping/consumer)
 
@@ -7,6 +7,8 @@
 	go get github.com/liujianping/consumer
 
 ##  特点
+
+- 好用，：）
 
 ##  用例
 
