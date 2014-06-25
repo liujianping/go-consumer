@@ -54,10 +54,10 @@ func NewConsumer(name string, ctx interface{}, memorySize int, fork int) *Consum
 	c.waitGroup.Wrap(func() { c.router() })
 	
 	if c.fork == 0 {
-		c.waitGroup.Wrap(func() { c.productPump(0) })
+		c.waitGroup.Wrap(func() { c.productPump(true) })
 	} else {
 		for i := 1; i <= c.fork; i++ {
-			c.waitGroup.Wrap(func() { c.productPump(i) })	
+			c.waitGroup.Wrap(func() { c.productPump(false) })	
 		}	
 	}
 		
@@ -99,6 +99,7 @@ func (c *Consumer) exit() error {
 }
 
 func (c *Consumer) router() {
+	log.Printf("consumer(%s): starting ... router", c.name)
 	for product := range c.produce {
 		select {
 			case c.memChan <- product:
@@ -122,8 +123,7 @@ func (c *Consumer) exec(p IProduct) {
 	}
 }
 
-func (c *Consumer) productPump(tid int) {
-	
+func (c *Consumer) productPump(fork bool) {
 	for {
 		select {
 		case <-c.timeout:
@@ -132,7 +132,7 @@ func (c *Consumer) productPump(tid int) {
 			}
 			continue
 		case p := <-c.memChan:
-			if tid == 0 {
+			if fork {
 				c.waitGroup.Wrap(func() { c.exec(p)})	
 			} else {
 				c.exec(p)					
@@ -144,7 +144,7 @@ func (c *Consumer) productPump(tid int) {
 				p, _ := ele.Value.(IProduct)
 				c.queue.Remove(ele)
 				c.Unlock()							
-				if tid == 0 {
+				if fork {
 					c.waitGroup.Wrap(func() { c.exec(p)})	
 				} else {
 					c.exec(p)					
@@ -157,7 +157,7 @@ func (c *Consumer) productPump(tid int) {
 		}
 	}
 exit:
-	log.Printf("consumer(%s): closing ... run", c.name)
+	log.Printf("consumer(%s): closing ... productPump", c.name)
 }
 
 func (c *Consumer) Close() error{
