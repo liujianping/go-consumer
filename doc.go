@@ -2,7 +2,13 @@
 package consumer 
 
 /*
-import "time"
+package main
+
+import (
+	"time"
+	"log"
+	"github.com/liujianping/consumer"
+)
 
 type Core struct{
 	main chan bool
@@ -10,26 +16,24 @@ type Core struct{
 }
 
 type MyProduct struct{
-	Product
+	No int
 }
 
 func (p *MyProduct) Do(core interface{}) bool {
-	println("myproduct do")
+	log.Printf("product No(%d) do", p.No)
 
 	c,_ := core.(*Core)
-	println("core", c.count)
+
+	time.Sleep(time.Millisecond * 250)
+	log.Println("core", c.count)
+	c.count++
 
 	return false
 }
 
 func timeout(core interface{}) bool {
 	c,_ := core.(*Core)
-	c.count ++
-	println("timeout", c.count)
-	if c.count >= 10 {
-		c.main <- true
-		return true
-	}
+	log.Println("timeout ...............", c.count)
 	return false
 }
 
@@ -37,19 +41,12 @@ func main() {
 
 	core := &Core{ main: make(chan bool, 0), count:0}
 
-	consumer := NewConsumer(core, 10)
+	consumer := consumer.NewConsumer("sleepy",core, 10)
 	consumer.SetTimeout(time.Second, timeout)
-	go consumer.Run()
 
-	p1 := &MyProduct{}
-	consumer.Produce <- p1
-
-	time.Sleep(time.Second*2)
-
-	p2 := &MyProduct{}
-	consumer.Produce <- p2	
-
-	<-core.main
+	for i:= 1; i <= 30; i++ {
+		consumer.Produce(&MyProduct{i})
+	}
 	
 	consumer.Close()
 }

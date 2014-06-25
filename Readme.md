@@ -1,4 +1,4 @@
-# 基于Golang开发的生产者消费者模型，大量用于消息队列处理服务中
+# golang channel 经常由于消费速度慢于生产速度，导致channel操作阻塞(即使设置了channel得缓存空间，仍然会出问题)，严重影响了程序性能。
 
 [![GoDoc](http://godoc.org/github.com/liujianping/consumer?status.png)](http://godoc.org/github.com/liujianping/consumer)
 
@@ -8,7 +8,8 @@
 
 ##  特点
 
-- 好用，：）
+- 支持基于本地内存的队列缓存
+- 支持基于本地文件的队列缓存（todo）
 
 ##  用例
 
@@ -17,9 +18,9 @@ package main
 
 import (
 	"time"
+	"log"
 	"github.com/liujianping/consumer"
 )
-import 
 
 type Core struct{
 	main chan bool
@@ -27,26 +28,24 @@ type Core struct{
 }
 
 type MyProduct struct{
-	Product
+	No int
 }
 
 func (p *MyProduct) Do(core interface{}) bool {
-	println("myproduct do")
+	log.Printf("product No(%d) do", p.No)
 
 	c,_ := core.(*Core)
-	println("core", c.count)
+
+	time.Sleep(time.Millisecond * 100)
+	log.Println("core", c.count)
+	c.count++
 
 	return false
 }
 
 func timeout(core interface{}) bool {
 	c,_ := core.(*Core)
-	c.count ++
-	println("timeout", c.count)
-	if c.count >= 10 {
-		c.main <- true
-		return true
-	}
+	log.Println("timeout", c.count)
 	return false
 }
 
@@ -54,19 +53,11 @@ func main() {
 
 	core := &Core{ main: make(chan bool, 0), count:0}
 
-	consumer := NewConsumer(core, 10)
-	consumer.SetTimeout(time.Second, timeout)
-	go consumer.Run()
-
-	p1 := &MyProduct{}
-	consumer.Produce <- p1
-
-	time.Sleep(time.Second*2)
-
-	p2 := &MyProduct{}
-	consumer.Produce <- p2	
-
-	<-core.main
+	consumer := consumer.NewConsumer("sleepy",core, 10)
+	
+	for i:= 1; i <= 30; i++ {
+		consumer.Produce(&MyProduct{i})
+	}
 	
 	consumer.Close()
 }
