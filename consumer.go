@@ -23,24 +23,18 @@ func (w *WaitGroupWrapper) Wrap(cb func()) {
 
 
 type IProduct interface {
-	Do(core interface{}) bool
+	Do(ctx interface{}) error
 }
 
-type ctrl bool 
-
-func (s ctrl) Do(core interface{}) bool {
-	log.Println("consumer ctrl", s)
-	return bool(s)
-}
-
-type TimeOut func(core interface{}) bool
+type TimeOut func(ctx interface{}) error
 
 type Consumer struct{
 	name 	string
+	fork	int
 	sync.RWMutex
 	timeout <-chan   time.Time
 	timefun TimeOut
-	core	interface{}
+	context	interface{}
 	produce chan IProduct
 	memChan chan IProduct
 	exitFlag int32
@@ -48,16 +42,25 @@ type Consumer struct{
 	waitGroup WaitGroupWrapper
 }
 
-func NewConsumer(name string, core interface{}, size int) *Consumer {
+func NewConsumer(name string, ctx interface{}, memorySize int, fork int) *Consumer {
 	c := &Consumer{
 					name: name,
-					core: core, 
+					fork: fork,
+					context: ctx, 
 					produce: make(chan IProduct, 1),
-					memChan: make(chan IProduct, size),
+					memChan: make(chan IProduct, memorySize),
 					queue: list.New(),
 				}
 	c.waitGroup.Wrap(func() { c.router() })
-	c.waitGroup.Wrap(func() { c.productPump() })
+	
+	if c.fork == 0 {
+		c.waitGroup.Wrap(func() { c.productPump(0) })
+	} else {
+		for i := 1; i <= c.fork; i++ {
+			c.waitGroup.Wrap(func() { c.productPump(i) })	
+		}	
+	}
+		
 	return c
 }
 
@@ -85,7 +88,7 @@ func (c *Consumer) exit() error {
 		return errors.New("exiting")
 	}
 
-	c.produce <- ctrl(true)
+	atomic.StoreInt32(&c.exitFlag, 1)
 	c.Lock()
 	close(c.produce)
 	c.Unlock()
@@ -113,31 +116,43 @@ func (c *Consumer) SetTimeout(duration time.Duration, timeout TimeOut) {
 	c.timefun = timeout
 }
 
-func (c *Consumer) productPump() {
+func (c *Consumer) exec(p IProduct) {
+	if err := p.Do(c.context); err != nil {
+		log.Printf("WARN: consumer(%s) do failed - %s", c.name, err.Error())
+	}
+}
+
+func (c *Consumer) productPump(tid int) {
 	
 	for {
 		select {
 		case <-c.timeout:
-			if c.timefun(c.core) {
-				goto exit
+			if err := c.timefun(c.context); err != nil {
+				log.Printf("WARN: consumer(%s) timeout failed - %s", c.name, err.Error())
 			}
 			continue
 		case p := <-c.memChan:
-			if p.Do(c.core) {
-				goto exit
-			}
+			if tid == 0 {
+				c.waitGroup.Wrap(func() { c.exec(p)})	
+			} else {
+				c.exec(p)					
+			}			
 			continue
 		default:
 			if ele := c.queue.Front(); ele != nil {
 				c.Lock()
 				p, _ := ele.Value.(IProduct)
 				c.queue.Remove(ele)
-				c.Unlock()			
-				if p.Do(c.core) {
-					goto exit
+				c.Unlock()							
+				if tid == 0 {
+					c.waitGroup.Wrap(func() { c.exec(p)})	
+				} else {
+					c.exec(p)					
 				}
 			} else {
-
+			   if atomic.LoadInt32(&c.exitFlag) == 1 {
+			   		goto exit
+			   }
 			}
 		}
 	}
@@ -145,12 +160,6 @@ exit:
 	log.Printf("consumer(%s): closing ... run", c.name)
 }
 
-func (c *Consumer) Close() {
-	c.produce <- ctrl(true)
-
-	c.Lock()
-	close(c.produce)
-	c.Unlock()
-
-	c.waitGroup.Wait()
+func (c *Consumer) Close() error{
+	return c.exit()
 }
