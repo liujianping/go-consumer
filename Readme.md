@@ -46,7 +46,7 @@ type Context interface{
 	consume := consumer.NewMemoryConsumer("mem", 32)
 
 	//! create persist consumer
-	consume := consumer.NewPersistConsumer("mem", 32)
+	consume := consumer.NewPersistConsumer("persist", 32, "./", 102400, 1000, time.Second)
 
 	//! resume consume with threads
 
