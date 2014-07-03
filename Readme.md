@@ -35,6 +35,32 @@ type Context interface{
 }
 
 ````
+## Usage
+
+````go
+
+	//! create context 
+	ctx := ...
+
+	//! create memory consumer
+	consume := consumer.NewMemoryConsumer("mem", 32)
+
+	//! create persist consumer
+	consume := consumer.NewPersistConsumer("mem", 32)
+
+	//! resume consume with threads
+
+	//! single
+	consume.Resume(ctx, 1)
+
+	//! fixed threads
+	consume.Resume(ctx, 4)
+
+	//! unfixed threads, each product consumption with a new thread
+	consume.Resume(ctx, 0)
+
+
+````
 
 ## Quick Start
 
