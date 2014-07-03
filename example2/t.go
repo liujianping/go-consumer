@@ -3,14 +3,12 @@ package main
 import (
 	"time"
 	"log"
-	//"errors"
-	//"sync/atomic"
+	"encoding/json"
 	"github.com/liujianping/consumer"
 )
 
 type context struct{
-	main chan bool
-	count int32
+	stop chan bool
 }
 
 func (c *context) Do(req interface{}) error {
@@ -19,11 +17,12 @@ func (c *context) Do(req interface{}) error {
 }
 
 func (c *context) Encode(request interface{}) ([]byte, error) {
-	return nil,nil
+	return json.Marshal(request)
 }
 func (c *context) Decode(data []byte) (interface{}, error) {
-
-	return nil,nil
+	var p MyProduct
+	err := json.Unmarshal(data, &p)
+	return &p, err
 }
 
 
@@ -32,9 +31,6 @@ func (p *MyProduct) Do(c *context) error {
 
 	time.Sleep(time.Millisecond * 250)
 	
-	if p.No == 30 {
-		c.main <- true
-	}
 	log.Printf("product No(%d) Done", p.No)
 	return nil
 }
@@ -45,15 +41,18 @@ type MyProduct struct{
 }
 
 func main() {
-	core := &context{ main: make(chan bool, 0), count:0}
+	core := &context{ stop: make(chan bool, 0)}
 
-	consumer := consumer.NewMemoryConsumer("sleepy", 10)
-	consumer.Resume(core, 4)
+	consumer := consumer.NewPersistConsumer("sleepy", 10, "./", 10240, 8, time.Second)
+	consumer.Resume(core, 2)
 	
-	for i:= 1; i <= 30; i++ {
-		consumer.Put(&MyProduct{i})
-	}
+	//! uncomment and mod for your test
+	// for i:= 31; i <= 60; i++ {
+	// 	consumer.Put(&MyProduct{i})
+	// }
 	log.Printf("consumer running %v", consumer.Running())
-	consumer.Close()
+	
+	consumer.Close()	
+	
 	log.Printf("consumer running %v", consumer.Running())
 }
